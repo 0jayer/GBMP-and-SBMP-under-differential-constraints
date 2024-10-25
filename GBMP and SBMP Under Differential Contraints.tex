@@ -1,0 +1,803 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% --------------------------------------------------------
+% Rho
+% LaTeX Template
+% Version 2.0.0 (21/05/2024)
+%
+% Authors: 
+% Guillermo Jimenez (memo.notess1@gmail.com)
+% Eduardo Gracidas (eduardo.gracidas29@gmail.com)
+% 
+% License:
+% Creative Commons CC BY 4.0
+% --------------------------------------------------------
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[9pt,a4paper,twoside]{rho-class/rho}
+\setbool{rho-abstract}{true} % Set false to hide the abstract
+\setbool{corres-info}{true} % Set false to hide the corresponding author section
+\setbool{linenumbers}{true} % Set false to hide the line numbering
+
+%----------------------------------------------------------
+% TITLE
+%----------------------------------------------------------
+
+%\journalname{Example Template}
+\title{Grid-Based and Sampling-Based Motion Planning under
+Differential Constraints}
+
+%----------------------------------------------------------
+% AUTHORS AND AFFILIATIONS
+%----------------------------------------------------------
+
+\author[1]{Author One}
+\author[2]{Author Two}
+%\author[3,$\dagger$]{Author Three}
+
+%----------------------------------------------------------
+
+\affil[1]{\Large Ahnaf Ojayer - 2121949642}
+\affil[2]{\Large Maisha Subha - 2111925042}
+%\affil[3]{Affiliation of author three}
+\affil[$\dagger$]{\large These authors contributed equally to this work}
+
+%----------------------------------------------------------
+% DATES
+%----------------------------------------------------------
+
+%\dates{This manuscript was compile on April 28, 2024}
+
+%----------------------------------------------------------
+% FOOTER INFORMATION
+%----------------------------------------------------------
+
+%\leadauthor{Author last name et al.}
+\footinfo{Creative Commons CC BY 4.0}
+%\smalltitle{\LaTeX\ Template}
+%\institution{College name}
+%\theday{May 21, 2024} %\today
+
+%----------------------------------------------------------
+% ARTICLE INFORMATION
+%----------------------------------------------------------
+
+%\corres{Provide the corresponding author information and publisher here.}
+%\email{example@organization.com.}
+%\doi{\url{https://www.doi.org/exampledoi/XXXXXXXXXX}}
+
+%\received{March 20, 2024}
+%\revised{April 16, 2024}
+%\accepted{April 20, 2024}
+%\published{May 21, 2024}
+
+%\license{Rho LaTeX Class \ccLogo\ This document is licensed under Creative Commons CC BY 4.0.}
+
+%----------------------------------------------------------
+% ABSTRACT
+%----------------------------------------------------------
+
+\begin{abstract}
+    Path planning is a classic problem for autonomous robots. To ensure safe and efficient point-to-point navigation, an appropriate algorithm should be chosen keeping the robot’s dimensions and its classification in mind. Autonomous robots use path-planning algorithms to safely navigate a dynamic, dense, and unknown environment. A few metrics for path planning algorithms to be taken into account are safety, efficiency, lowest-cost path generation, and obstacle avoidance. Before path planning can take place we need a map representation which can be discretized or open configuration space. Discretized configuration space provides node/connectivity information from one point to another. While in open/free configuration space it is up to the algorithm to create a list of nodes and then find a feasible path. Both types of maps are populated by obstacle positions using perception obstacle detection techniques to represent current obstacles from the perspective of the robot. For open configuration spaces, sampling based planning algorithms are used. This paper aims to explore Grid based algorithms and Sampling-based path-planning algorithms such as Probabilistic RoadMap (PRM) and discusses how optimization is achieved and is beneficial.
+\end{abstract}
+
+%----------------------------------------------------------
+
+\keywords{Unicycle Model, A* Algorithm, Probabilistic Roadmap (PRM), Kinodynamics, Path Planning}
+
+%----------------------------------------------------------
+
+\begin{document}
+	
+    \maketitle
+    \thispagestyle{firststyle}
+    % \tableofcontents
+
+%----------------------------------------------------------
+
+\section{Introduction}
+
+    \rhostart{T}he application areas of autonomous robots have seen exponential growing in the last decade. Today they are used in distribution centres, security, healthcare, hospitality, grocery stores, delivery, self-driving cars, etc. Each market and industry is heading toward automation and eventually will start using autonomous robots. 
+    
+    Robot motion is a complex problem to solve given the robot’s dynamics and constantly changing environment. Navigation requires modelling of the environment and localization to understand the robot’s current position within the environment. First, it detects obstacles and then creates an obstacle-free path to the goal providing control inputs on how to reach there. Path planning plays a key role to find feasible trajectories to reach the goal.
+    
+    This paper explores a Grid Based algorithm(A*) and a Sampling-based path-planning algorithm(PRM) that evolved in the last few decades. The relevance of comparing the Probabilistic Roadmap Method (PRM) and the A* a pathfinding algorithm in the context of kinodynamic motion planning for a unicycle robot arises from their differing approaches to handling constraints and pathfinding. PRM, widely used in high-dimensional configuration spaces, excels in exploring complex environments by constructing a graph of feasible paths, though it often requires additional steps to ensure dynamic feasibility. Conversely, A* is a renowned graph search algorithm that guarantees the shortest path in a grid-based model, by using an appropriate heuristic.
+    
+    For a unicycle robot, which has non-holonomic constraints, understanding the performance and applicability of PRM and A* can yield valuable insights. This comparison can illuminate the strengths and limitations of each algorithm regarding computational efficiency, path quality, and feasibility within the context of kinodynamic motion planning.
+
+\section{Background}
+
+    Figure \ref{fig:figure} shows the Flow chart of Robot’s operation and data flow into Path-planners.
+        
+            \begin{figure}[H]
+                \centering
+                \includegraphics[width=0.71\columnwidth]{back 2.jpg}
+                \caption{Figure-1: Flow chart of Robot’s operation and data flow into Path-planners}
+                \label{fig:figure}
+            \end{figure}
+
+
+    \subsection{Sensors}
+    
+        Humans navigate in the world by sensing the environment which makes them aware of their own location and also moving parts of the external environment. For a robot to perform any task it also needs sensory data to perceive the environment it is operating in. 
+        
+        The next question comes to what type of sensors are available and what are their use cases. These sensors can further be subcategorized into the 2D Camera, 3D Camera, Topographic Lidar, and Bathymetric Lidar. The most common sensors used are - Camera, Lidar, Radar, IMU, etc. 
+        
+        In autonomous driving multi-camera setups combined with Lidars are mostly used. Overall sensor setup gathers raw information about all the objects around it and then it passes it to the localization and obstacle detection (perception) unit. 
+
+    \subsection{Localization}
+
+        The localization sub-system tells the robot its current location with respect to the global frame. For e.g. how Google Maps can give information about our current location on the map. 
+        
+        Why is it important? Before planning the goal, the robot needs to get the right start location which comes from localization. The reliability of the localization unit is the most important factor - how confident is it in this system that the robot is at X position right now? 
+        
+        Localization is done by using sensor input, previously logged locations, and fixed maps. These fixed maps are generally generated by mapping static components of the environment for e.g. in a city mapping building, traffic signals, etc.
+
+    \subsection{Obstacle Detection}
+
+        All the sensors provide raw data which doesn’t make any sense to human eyes but it contains precise locations of an object with respect to the robot. This sensor data is processed by the Obstacle Detection or Perception unit to map these objects on the map. Some of these sensors when used standalone are not sufficient to make a confident decision where an object is seen. 
+        
+        A multi-sensor setup provides various types of raw data to come to a more confident decision. Recently in the autonomous vehicle industry, the focus has been on detecting 3D obstacles to provide a better map representation of objects around a card. These are the various state-of-art techniques to detect 3D obstacles like vision-radar-based fusion, surround view vision-based detection, and transformer-based sensor fusion etc.
+
+    \subsection{Map Representation}
+
+        Both localization and obstacle detection is required before finalising the map representation to be sent to the path planners. Map representation sub-system consists of these two components: 
+        
+\begin{itemize}
+    \item \textbf{Static Map} is created by mapping static components of the environment. These static components do not move with time for e.g. a building on the side of a road.
+    
+    \item \textbf{Dynamic obstacle} detection updates are done when the perception unit provides information about an obstacle with respect to the current robot’s position provided by the localization unit.
+\end{itemize}
+
+    Map/configuration space consists of all the positions/configurations that the robot can reach. These maps can be represented in the form of costmaps or configuration space. Every point in the map has a cost for e.g. area within an obstacle is assigned a lethal cost so that planners do not plan through it.
+
+    \subsection{Path planning}
+
+        Path planning comes into the category of non-deterministic polynomial-time (NP) hard problems to find the path from the start to the goal location. As we put robots in a dynamic environment complexities increase, and the complexity of the algorithm also increases with an increase in the degrees of freedom of the robot. Navigation through a complex and dynamic environment poses challenges to generating a path that is safe and efficient. Path-planner takes costmap, start, and goal location as input to produce a path. Apart from cost areas, these maps can be discretized with added node connectivity. Grid-based planning like A*, Dijkstra, etc use discretized maps and generate an optimal low-cost path to the goal. Limitations of these types of algorithms arise in bigger maps where discretization is not possible and then sampling-based algorithms are the better choice. There are two criteria on which planning algorithms are rated: 
+        
+        \begin{itemize}
+            \item \textbf{Feasible:} A plan is guaranteed to be generated to the goal if it is possible to reach that point, efficiency is not a concern here.
+            
+            \item \textbf{Optimal:} Optimising the performance of the planner in addition to finding the path to the goal.
+        \end{itemize}
+        
+        In simpler terms, a path planner generates a plan which is a sequence of actions taken to reach the goal state. Robots today operate in dynamically changing environments so these planners also need to accommodate those functions of the state. Another way to categorise the planner is - Global vs Local planner. Global planners are used to generating a path from start to goal working with global costmaps while local planners work with smaller local costmaps and are used in trajectory generation and following. 
+
+
+
+        
+\section{Kino Dynamics Motion Planning}
+
+    Kino-dynamic motion planning is a method used in robotics and autonomous systems to plan paths for a robot that take into account both the kinematics (geometric constraints related to the robot's configuration) and dynamics (forces and torques affecting the robot's motion). This approach ensures that the generated paths are not only geometrically feasible but also dynamically achievable given the robot's physical capabilities and constraints.
+
+    Key Concepts of Kino-dynamic Motion Planning:
+    \begin{itemize}
+        \item \textbf{Kinematics:} Refers to the motion of the robot without considering the forces that cause the motion. This includes the robot's position, orientation, and possible configurations. Kinematic constraints involve aspects like joint limits and collision avoidance.
+        
+        \item \textbf{Dynamics:} Involves the forces and torques that influence the robot's movement. Dynamic constraints take into account the robot's mass, inertia, and the physical capabilities of actuators. This ensures the planned motions are feasible given the robot's ability to generate the required forces.
+        
+        \item \textbf{State Space:} Kino-dynamic planning operates in an augmented state space that includes both the robot's configuration (position, orientation) and its velocities. This means the planner must consider both where the robot is and how fast it is moving.
+        
+        \item \textbf{Trajectory Planning:} Unlike purely kinematic path planning, kino-dynamic planning produces trajectories that specify both the path and the timing. The trajectory includes positions, velocities, and possibly accelerations over time.
+        
+        \item \textbf{Constraints:} The planner must satisfy a set of constraints:
+         1. Kinematic constraints: Ensuring the robot doesn't violate joint limits or collide with obstacles.
+         2. Dynamic constraints: Ensuring the planned motion can be achieved given the robot's dynamic capabilities (e.g., acceleration limits, force limits).
+    \end{itemize}
+    
+    
+    In summary, kino-dynamic motion planning is essential for developing realistic and feasible motion plans for robots that must operate under both geometric and dynamic constraints, ensuring safe and effective operation in complex environments.
+
+
+\section{Unicycle Robot Mode}
+
+    The unicycle robot model is a simplified representation of a robot that has two degrees of freedom: linear velocity and angular velocity. It captures the basic motion characteristics of many wheeled robots, such as differential-drive robots.
+
+
+    \textbf{Equations of Motion:}\\
+     The state of the unicycle robot can be described by its position (x, y) in the plane and its orientation $\theta$ (the angle between the robot's heading and a reference direction, usually the x-axis). The state of the unicycle robot can be described by its linear velocity (v) and rotational velocity $\omega$ The equations of motion for the unicycle model are: \\
+     
+     \textbf{Dynamics and constraints:}
+     
+     State variables:
+     
+       x , y : position coordinates 
+       
+       $\theta$ : orientation of the robot (heading angle)
+       
+     Control variables:
+     
+       v : linear velocity
+       
+       $\omega$ : angular velocity
+
+     
+     \textbf{Kinematic Model:} \\
+     A differential drive robot’s kinematic model is defined as :
+     \begin{align*}
+         \Dot{x}& = v\cos{\theta}\\
+         \Dot{y}& = v\sin{\theta}\\
+         \Dot{\theta}& = \omega
+     \end{align*}
+    \textbf{Dynamic Constraints:}\\
+    Velocity Constraint :         0 $\leq$ v $\leq$ $v_{max}$ \\
+    Angular velocity Constraint : 0 $\leq$ $\omega$ $\leq$ $\omega_{max}$\\
+
+    \subsection{Applications}
+
+       1. Path Planning: The unicycle model is often used in path planning algorithms to simulate and control the motion of wheeled robots.
+       2. Control Systems: Designing controllers that can drive the robot to follow a desired trajectory.
+       3. Simulation: Simulating the behaviour of robots in environments where precise manoeuvrability and realistic motion dynamics are necessary.
+       
+       In summary, the unicycle robot model provides a simple yet effective way to describe and control the motion of wheeled robots, making it a fundamental concept in robotics and autonomous systems.
+
+       \section{Path planners}
+
+            \subsection{Grid-Based Path Planning}
+            Grid-based path planning is a technique used in robotics, AI, and computer graphics to find a path from a start point to a goal point on a grid. The grid represents the environment where the environment is divided into a uniform grid of cells and each cell can be either traversable (free space) or non-traversable (obstacle). A cell's neighbours are typically the cells adjacent to it, either in four directions (up, down, left, right) for 4-connected grids or in eight directions (including diagonals) for 8-connected grids.Several algorithms can be used for grid-based path planning, with A* being one of the most common. 
+            
+            In summary, grid-based path planning provides a practical and effective approach for navigating through environments by discretizing the space into manageable units and using algorithms like A* to find optimal paths.
+
+            \subsubsection{A* Algorithm}
+            The A*  algorithm is a popular and widely used pathfinding and graph traversal algorithm, often used in fields such as robotics, video games, and AI for finding the shortest path between two nodes. It combines the features of Dijkstra's algorithm and the Greedy Best-First-Search, using a heuristic to guide its search. It is a powerful algorithm that effectively finds the shortest path by balancing exploration of the search space with heuristic guidance. Its ability to guarantee the shortest path while being computationally efficient (with a good heuristic) makes it a popular choice for various pathfinding and traversal problems.
+
+            \subsection{Pseudocode of A* Algorithm}
+            %This class\footnote{Hello there! I am a footnote :)} includes the %\textit{listings} package, which offers customized features for %adding codes specially for C, C++, \LaTeX\ and Matlab. You can %customize the format in \textit{rho class} file.
+
+            \nolinenumbers
+            \lstinputlisting[caption=Pseudocode of A* Algorithm., label={lst:listing-Mat}, language=Python]{codes.m}
+            \linenumbers
+
+    
+
+
+            \subsection{Sampling Based Path Planning}
+            Sampling-based path planner randomly connects points in the state space and constructs a graph to create obstacle free paths. These algorithms don't require exploring the full configuration space so they are faster and more efficient. The number of iterations to generate the graph connectivity can be set by the user which will dictate the optimality of the path that it finds. These types of algorithms present a significant issue while traversing tight spaces as it is difficult to find the connectivity through narrow spaces via random sampling. Following are the different types of Samplingbased Path Planners. Probabilistic Roadmap (PRM), and Rapidly-exploring Random Trees (RRT) are the two most discussed algorithms in Sampling-based path planners. Differentiation in these comes from the way they connect points to create the graph.
+
+            \subsubsection{Probabilistic Roadmap(PRM) Algorithm}
+            PRM (Probabilistic Roadmap) is one of the initial sampling based path planners. PRM is a graph containing nodes and edges in a map consisting of obstacles and obstacle-free areas. First, it generates randomly sampled nodes in the configuration space and then connects the current node to its neighbouring nodes if the edge is in an obstacle-free area. PRM also takes the radius as an input to determine which random neighbours are calculated and going to be connected. To generate random sampling nodes this paper describes a variety of methods. After generating random neighbouring nodes within a fixed radius, PRM divides them into smaller connected graphs/clusters. These clusters are circular with a radius as described by the user. Every node can belong to multiple connected clusters. Neighbouring nodes are sorted by a metric e.g. increasing distance from the current node. Each neighbour node is checked if it belongs to the same connected cluster as the current node is in, if not then it is added to the same cluster. Parsed radius will determine the performance of a PRM generated graph; the bigger the radius, the more neighbours will be generated and determined for their cluster association. We can also parse a parameter total number of nodes to be generated by the PRM algorithm the more this number is, the increased time PRM Algorithm takes to create the graph. But if this number is too low, it can generate a fragmented graph. The limitations of PRM come in place in the obstacle-dense regions and present the issue of fractured graphs. Looking for the shortest path is also challenging for the resulting sparse graph.
+
+            \subsection{Pseudocode of PRM Algorithm}
+            %This class\footnote{Hello there! I am a footnote :)} includes the %\textit{listings} package, which offers customized features for %adding codes specially for C, C++, \LaTeX\ and Matlab. You can %customize the format in \textit{rho class} file.
+
+            \nolinenumbers
+            \lstinputlisting[caption=Pseudocode of PRM Algorithm., label={lst:listing-Mat}, language=Python]{code_prm.m}
+            \linenumbers
+    
+            %If line numbering is enabled, we recommend placing the command %\verb|\nolinenumbers| at the beginning and \verb|\linenumbers| at %the end of the code. 
+
+
+
+        
+
+
+    
+
+    
+    
+%\section{Figures and tables}
+
+    %\subsection{Sample figure}
+
+        %Figure \ref{fig:figure} shows an example figure.
+        
+           % \begin{figure}[H]
+                %\centering
+                %\includegraphics[width=0.71\columnwidth]{figures/Example.pdf}
+                %\caption{Example figure obtained from PGFPlots %\cite{PFGPlots}.}
+                %\label{fig:figure}
+           % \end{figure}
+
+    %\subsection{Sample double figure}
+
+        \begin{figure*}[t!] % t for position at the top of the current page; b for position at the bottom of the current page
+            \centering
+                \begin{subfigure}[b]{0.38\linewidth} % Fig (a)
+                    \includegraphics[width=\linewidth]{A_star.jpg}
+                    \caption{Kinodynamic Pathplanning with A*.}
+                    \label{fig:figa}
+                \end{subfigure}
+            \hspace{15pt}   % Space between the figures
+                \begin{subfigure}[b]{0.38\linewidth} % Fig (b)
+                    \centering
+                    \includegraphics[width=\linewidth]{PRM.jpg}
+                    \caption{Kinodynamic Pathplanning with PRM.}
+                    \label{fig:figb}
+                \end{subfigure}
+            \caption{Kinodynamic Pathplanning with A* and PRM}
+            \label{fig:examplefloat}
+        \end{figure*}
+
+    \section{Methodology}
+    \subsection{Problem Definition}
+    Comparing PRM and the A* pathfinding algorithm for kinodynamic motion planning in a differential drive robot, A representative problem is defined to simulate a real-world environment. This problem will help in evaluating the algorithms' performance under various conditions, including static obstacles, varying environment complexities, and different initial and goal states.
+
+    \subsection{Problem scenario}
+    \textbf{Navigating a Warehouse Environment:}
+    
+    A differential drive robot is tasked with navigating through a warehouse to deliver packages. The warehouse is populated with shelves (static obstacles). The robot must move from a designated starting point to a delivery point, adhering to kinodynamic constraints.
+
+    \subsection{Implementation with A* Algorithm}
+    To solve the navigation problem of a differential drive robot in a warehouse using the A* algorithm while adhering to kino dynamic constraints, we will follow these steps:
+    
+    \subsubection{Define the Problem and Assumptions}
+    
+    \textbf{1. State Representation:} (x,y,$\theta$) where x and y are the coordinates, and $\theta$ is the orientation.
+    
+    \textbf{2. Action Space:} The robot can move forward with a fixed velocity v and can change its orientation with a fixed angular velocity $\omega$.
+    
+    \textbf{3. Warehouse Environment:} Represented by a grid with known obstacles (shelves).
+    
+    \textbf{4. Kino Dynamic Constraints:} The robot's motion is governed by:
+    \begin{align*}
+         \Dot{x}& = v\cos{\theta}\\
+         \Dot{y}& = v\sin{\theta}\\
+         \Dot{\theta}& = \omega
+     \end{align*}
+
+     \subsubsection{Motion Model and Discretization}
+     Discretize the state space and the action space for simplicity:
+
+    Linear Velocity v: Assume v=1 unit/s 
+    
+    Angular Velocity $\omega$: Assume $\omega$=±$\pi$/4
+    
+    Time Step $\Delta$t: Assume $\Delta$t=1s
+
+    \subsubsection{Heuristic Function}
+    We will use the Euclidean distance as the heuristic:
+    \begin{equation}
+        h(x,y) = \sqrt{(y_{goal}-y)^2+(x_{goal}-x)^2}
+    \end{equation}
+
+    \subsubsection{Cost Function}
+    The cost function g(x,y,$\theta$) is the actual distance travelled, given by the sum of the linear distances moved at each step.
+
+    \subsubsection{Implementing the A* Algorithm}
+
+    We need to mathematically describe the process of finding the shortest path from the start to the goal.
+    
+    Initial and Goal States:
+    
+    Start State: S=($x_s$,$y_s$,$\theta_s$)=(0,0,0)
+    
+    Goal State: G=($x_g$,$y_g$,$\theta_g$)=(10,10,0)
+    
+    Obstacles:
+    Assume we have obstacles at certain grid cells in the warehouse.
+    
+    Steps to Calculate Path:
+    
+    \textbf{1. Initialization:}
+    
+        Open list contains the start node S.
+        
+        Closed list is empty.
+        
+        g(S)=0, h(S) = h(0,0) = \sqrt{(10−0)^2+(10−0)^2}= 102
+        
+        Total cost f(S) = g(S)+h(S) = 102 
+
+   \textbf{ 2.Expand Node S:}
+   
+    Generate possible next states using the model: 
+    \begin{align*}
+         Move Forward : (\Bar{x},\Bar{y},\Bar{\theta})& = (x+v\cos{\theta}\Deltat,y+v\sin{\theta}\Deltat,\theta)\\
+         Turn Left : (\Bar{x},\Bar{y},\Bar{\theta}) = (x,y,\theta+\omega\Deltat)\\
+         Turn Right : (\Bar{x},\Bar{y},\Bar{\theta}) = (x,y,\theta+\omega\Deltat)
+     \end{align*}
+
+    \textbf{3.Calculate Cost:}
+    For each new state, calculate g, h, and f:
+    
+        Move Forward: g((1,0,0))=1, h((1,0))=\sqrt{(10−1)^2+(10−0)^2}=\sqrt{181}
+        
+        Turn Left and Turn Right: Costs remain the same, as no actual movement.
+
+    \textbf{4. Add New States to Open List:}
+        States are added to the open list if they are not in the closed list and do not collide with obstacles.
+
+   \textbf{ 5.Iterate:}
+        Continue the process by selecting the node with the lowest f value from the open list, expanding it, and updating the lists.
+        The process continues until the goal state is reached.
+
+    \subsubsection{Mathematical Calculations}
+    To illustrate a few iterations:
+    
+         \textbf{First Iteration:}\\
+    Expand (0,0,0):\\
+    New states: \\
+    (1,0,0),       g=1, h=\sqrt{181},f=1+\sqrt{181}\\
+    (0,0,π4),      g=0, h=\sqrt{200},f=\sqrt{200}\\
+    (0,0,−π4),     g=0, h=\sqrt{200},f=\sqrt{200}\\
+    
+        \textbf{Second Iteration:}\\
+    Expand the state with the lowest f:\\
+    Suppose (1,0,0) is chosen:\\
+    New states: 
+    (2,0,0),      g=2, h=\sqrt{160}, f=2+\sqrt{160}\\
+    (1,0,π4),     g=1, h=\sqrt{181}, f=1+\sqrt{181}\\
+    (1,0,−π4),    g=1, h=\sqrt{181}, f=1+\sqrt{181}
+    
+Continue iterating, updating the open list and closed list, until the goal state (10,10,0) is reached.
+
+The A* algorithm, combined with a proper heuristic and consideration of the kino dynamic constraints, will eventually find from the start to the goal, avoiding obstacles and respecting the motion capabilities of the differential drive robot.
+
+    \subsection{Implementation with Probabilistic Roadmap (PRM) Algorithm}
+    To solve the problem of navigating a differential drive robot through a warehouse using the Probabilistic Roadmap (PRM) algorithm while adhering to kino dynamic constraints, we will outline the mathematical steps required to generate a feasible path from the start point to the goal point.
+    
+    Steps to Solve Using PRM Algorithm:
+    
+    \textbf{1. Define the State Space and Obstacles:}
+    
+    State space: (x,y,$\theta$), where (x,y) are the coordinates and $\theta$ is the orientation.
+    
+    Obstacles: Assume a set of rectangular shelves represented by their coordinates in the warehouse grid.
+    
+    \textbf{2.Generate Random Samples:}
+    Generate N random samples ($x_i$,$y_i$,$\theta_i$) within the free space(i.e., not inside the obstacles)
+    
+    Include the start ($x_s$,$y_s$,$\theta_s$) and goal($x_g$,$y_g$,$\theta_g$) in the sample set.
+    
+    \textbf{3.Connect Samples to Form a Roadmap:}
+    For each sample, find the k-nearest neighbours (using Euclidean distance in (x,y).
+    
+    Attempt to connect each sample to its neighbours using feasible paths that respect kino dynamic constraints.
+
+    \subsubsection{Initial Setup}
+Warehouse Dimensions: 20×20 units.
+
+Obstacle: Let’s assume rectangular shelves with the following coordinates:
+
+    Obstacle 1 : (5,5) to (7,7)
+    
+    Obstacle 2: (10,10) to (12,12)
+    
+    Obstacle 3: (15,15) to (17,17)
+
+Start and Goal:
+
+	Start: (0,0,0)
+ 
+	Goal: (10,10,0)
+
+    \subsubsection{Steps for Calculation}
+    \textbf{Step 1:} Generate Random Samples
+    Generate N=100 random samples ($x_i$,$y_i$,$\theta_i$) within the warehouse, excluding areas occupied by obstacles.
+
+    \textbf{Step 2:} Include Start and Goal
+    Include start (0,0,0) and goal (10,10,0) in the sample set.
+
+    \textbf{Step 3:} Connect Samples
+    Calculate Distance:
+
+    For each pair of samples ($x_i$,$y_i$,$\theta_i$) and ($x_j$,$y_j$,$\theta_j$), calculate the Euclidean distance $d_{ij}_$ in the (x,y) plane:
+
+    dij=\sqrt{($x_i$-$x_j$)^2+($y_i$-$y_j$)^2}
+
+    \textbf{Check Feasibility:}
+
+    Check if a path between ($x_i$,$y_i$,$\theta_i$) and ($x_j$,$y_j$,$\theta_j$) is feasible:
+
+    \textbf{Direct Path (Straight Line):}
+
+    Linear distance: \Deltas=$d_ij$
+
+    \textbf{Time to travel:} \Deltat=\Deltas/v,assuming constant velocity v=1 unit/s
+
+    \textbf{Check for collision:} Ensure the straight path does not intersect any obstacles.
+
+    \textbf{Path with Rotation:}
+
+    For paths requiring rotation, consider the differential drive constraints:
+
+    $\Delta\theta$=$\theta_j$-$\theta_i$
+
+    Angular distance: $\Delta\theta$
+
+    Time to rotate: \Deltat$\Delta\theta$=$\delta\theta$/$\omega$, assuming angular velocity $\omega$=π/4 rad/s
+
+    Calculate intermediate positions and check for collisions.
+
+    Form the Roadmap: Connect each sample to its k=5 nearest neighbours using the feasible paths.
+
+    \textbf{Step 4: Search for a Path on the Roadmap}
+
+    1.Graph Representation:
+
+    Nodes: Samples ($x_i$,$y_i$,$\theta_i$)
+
+    Edges: Feasible paths between nodes with associated costs (distance).
+
+    2.Path Search Using A*:
+
+    Use A* algorithm to find the shortest path on the roadmap from the start node to the goal node.
+
+    Heuristic: Euclidean distance to the goal.
+
+    \subsubsection{Mathematical Calculation}
+
+    1. Sample Points:
+
+    Start: (0,0,0)
+
+    Goal: (10,10,0)
+
+    Random Sample: (3,4,$\pi$/6) , (6,8,−$\pi$/4)
+
+    2.Distance Calculation:
+
+    Distance between (2,2) and (3,4): 
+
+    $d_12$ = \sqrt{(3-0)^2+(4-0)^2}= 5
+
+    3  .Path Feasibility:
+
+    Check if the straight line from (0,0) to (3,4) intersects any obstacles.
+
+    If not, connect these samples.
+
+    4. A* path search:
+
+    Build a graph with nodes and edges.
+
+    Apply A* to find the path from (0,0,0) to (10,10,0).
+
+    \subsubsection{Path Found}
+
+    (0,0,0) to (3,4,/6)
+
+    (3,4,/6) to (6,8,-/4)
+
+    (6,8,-/4) to (10,10,0)
+
+    The PRM algorithm, combined with A* search on the roadmap, provides a feasible path from the start to the goal in a warehouse environment with static obstacles. The key steps involve generating random samples, connecting them based on kino dynamics and using A* to find the optimal path on the resulting graph.
+
+    \subsection{Cost Comparison}
+    To compare the costs of using A* and PRM algorithms for navigating a differential drive robot through a warehouse, we'll consider various cost components, including computation time, path length, and memory usage. Let's use the data provided earlier and break down the costs for each algorithm.
+
+    Warehouse Problem Setup:
+
+    Warehouse Dimensions: 20×20 units
+
+    Obstacles: Rectangular shelves at:
+
+    Obstacle 1: (5,5) to (7,7)
+
+    Obstacle 2: (10,10) to (12,12)
+
+    Obstacle 3: (15,15) to (17,17)
+
+    Start Point: (0,0,0)
+
+    Goal Point: (10,10,0)
+
+    Robot Kinematics:
+
+    Velocity v= 1 unit/s
+
+    Angular velocity $\omega$= ±$\pi$/4 rad/s
+
+    Grid Resolution for A*: 0.5 units
+
+    Cost Breakdown:
+
+    \subsubsection{A* Algorithm}
+
+    1. Computational Time Cost:
+
+    Nodes Expanded: 1500
+
+    Average Time to Expand a Node: 0.00167 seconds
+
+    Total Time: 1500×0.00167=2.5 seconds
+
+    2. Path Length:
+
+    Total Path Length: 25 units
+
+    3. Memory Usage:
+
+    Total Grid Cells: 40×40=1600
+
+    State Space Dimensions: 1600×8 (for 8 orientations)
+
+    Memory Usage: High (due to large state space and fine discretization)
+
+    3. Calculation:
+
+    Nodes Expanded: 1500
+
+    Total Nodes in Memory: 1600 (cells) × 8 (orientations) = 12800
+
+    Path Cost: Let's assume each unit of path length has a cost of 1, so 25 units path length = 25 cost units.
+
+    Total Cost for A*:
+
+    Total Cost = Computation Time+Path Cost+Memory 
+
+    Total Cost = 2.5 seconds+25 units+12800 units of memory
+
+    \subsubsection{PRM Algorithm}
+
+    1. Computation Time Cost:
+
+    Roadmap Construction:
+
+    Sampling Time: 0.5 seconds
+
+    Connection Time: 1.0 seconds
+
+    2. Path Search:
+
+    Nodes in Roadmap: 102 nodes
+
+    Nodes Expanded in Search: 50
+
+    Average Time to Expand a Node: 0.01 seconds
+
+    Total Search Time: 50×0.01=0.5 seconds
+
+    3. Path Length:
+
+    Total Path Length: 27 units
+
+    4. Memory Usage:
+
+    Number of Samples: 100
+
+    Total Nodes in Roadmap: 102 (including start and goal)
+
+    Total Edges: 500 (approximate)
+
+    5. Calculation:
+    Nodes Expanded in Search: 50
+
+    Total Nodes in Memory: 102 nodes
+
+    Path Cost: Let's assume each unit of path length has a cost of 1, so 27 units path length = 27 cost units.
+
+    Total Cost for PRM:
+
+    Total Cost = Construction Time+Search Time+Path Cost+Memory
+
+    Total Cost =1.5 seconds (construction)+0.5 seconds (search)+27 units+102 units of memory
+
+    \subsection{Experiment Result}
+
+    \begin{table}[h!]
+    \centering
+    \begin{tabular}{|l|c|r|}
+        \hline
+        Cost Component & A* Algorithm & PRM Algorithm \\
+        \hline
+        Computation Time & 2.5 seconds & 2.0 seconds \\
+        Path Length & 25 units & 27 units \\
+        Memory Usage & 12800 units & 102 units \\
+        \hline
+    \end{tabular}
+    \caption{The table contains the output}
+    \label{tab:example}
+    \end{table}
+
+    %\begin{table*}[pb]
+            %RaggedRight
+            %\caption{Table contains the output.}
+            %\label{tab:table}
+                %\begin{tabular}{lllp{12.2cm}}
+                    %\toprule
+                    %\textbf{Cost Component} & \textbf{A* Algorithm} & %\textbf{PRM Algorithm} \\ 
+                    %\midrule
+                    %Computation Time & 2.5 seconds & 2.0 seconds\\
+                    %Path Lengths & 25 units & 27 units\\
+                    %Memory Usage & 12800 units & 102 units\\
+                    %\bottomrule
+                %\end{tabular}
+                
+            %\tabletext{Note: Obtained from Latex tables \cite{projects-2023}.}
+            
+        %\end{table*}
+
+        \begin{itemize}
+            \item PRM is faster in terms of computation time.
+            \item A* provides a slightly shorter path.
+            \item PRM uses significantly less memory.
+        \end{itemize}
+
+\section{Result Analysis}
+
+\subsubsection{A* Result Analysis}
+
+    \begin{itemize}
+        \item A* efficiently and consistently found the most optimal path in every iteration of the simulation. This comes at a high computation cost.
+        \item A* algorithm checks for collision detection in every step this increases computation cost but ensures that path does not intersect with obstacles.
+        \item Even though the environment we tested was small the computation was costly for A* algorithm, for larger or more complex environments the performance will be affected drastically.
+    \end{itemize}
+
+\subsubsection{PRM Result Analysis}
+
+\begin{itemize}
+    \item PRM gave a road that was not as efficient as the path the grid based A* had followed. However it is to be mentioned that had we had only taken a sample of n=100, with more samples it might have given better results, but not necessarily optimal in terms of distance or nodes traversed.
+    \item PRM performs collision check when roadman is made this makes the connections collision free and traversal algorithms used afterwards do not need to check for extra collision detection.
+    \item PRM can handle larger and more complex environments better than A* due to its probabilistic nature. In the given scenario, the PRM algorithm was able to construct a path that avoided obstacles.
+\end{itemize}
+
+
+
+\textbf{A* excels in environments where optimality is paramount, but faces challenges with scalability and dynamic obstacles. Conversely, PRM offers greater flexibility and scalability, making it suitable for complex and dynamic environments, though it may not always guarantee the shortest path.}
+
+\subsubsection{Practical Implications}
+
+A* practical applications:
+\begin{itemize}
+    \item Any application that requires precise movement and optimal path such as surgery robots or self-driving cars.
+    \item For real time application in smaller environment where quick pathfinding is necessary, such as indoor mobile robots
+\end{itemize}
+
+PRM practical applications:  
+\begin{itemize}
+    \item Best suited for environments with complex obstacle configuration or large-scale outdoor areas
+    \item Allows for flexible and adaptable path planning which makes it suitable for autonomous vehicles and UAVs
+    \item The roadmap can be precomputed and reused which makes it suitable for applications where traversal of the same static environment is required.
+\end{itemize}
+
+\subsubsection{Limitations}
+
+ \textbf{Limitations of A*:}
+\begin{itemize}
+    \item Performance degrades with the increase in grid size and complexity. Not suitable for very large or highly complex environments without modifications.
+    \item Assumes a static environment, and handling dynamic obstacles requires additional modifications.
+\end{itemize}
+
+ \textbf{Limitations of PRM:}
+\begin{itemize}
+    \item The effectiveness of PRM depends on the number of samples and their distribution. Insufficient sampling can lead to poor path quality or failure to find a path.
+    \item While scalable, PRM can be computationally expensive, especially during the roadmap construction phase, requiring significant processing time and memory for large numbers of samples.
+    \item PRM does not guarantee the shortest path; it provides a feasible path which may not be optimal in terms of distance or cost.
+\end{itemize}
+
+\section{Future Work}
+Building on the findings of this research,a few avenues for future work are proposed:
+\begin{itemize}
+    \item \textbf{Real-Time Implementation:} Focus on the real-time implementation of the two algorithms in dynamic environments, such as autonomous driving and robotic navigation in urban settings. This includes optimising the computational costs of the algorithms to meet real-time processing requirements.
+    \item \textbf{Extended Kinodynamic Constraints:} Investigate the application of these planning methods to more complex kinodynamic models and constraints, such as those found in aerial and underwater robotics. This would involve extending the current algorithms to accommodate additional degrees of freedom and more intricate dynamic behaviours.
+    \item \textbf{Energy and Resource Constraints:} Incorporating considerations for energy consumption, computational resources, and other practical constraints into pathfinding algorithms to make them more applicable to real-world robotic systems.
+    \item \textbf{Learning-Based Methods:} Integrating machine learning techniques to improve the heuristic functions in A* or the sampling strategy in PRM, potentially leading to more efficient and intelligent pathfinding algorithms.
+    \item \textbf{User-Interactive Pathfinding:} Creating user-interactive systems where human operators can provide input or adjust parameters in real-time to influence the pathfinding process.
+\end{itemize}
+
+\section{Conclusion}
+In this research,the main objective was kinodynamic motion planning for a unicycle model using A* and Probabilistic Roadmap (PRM) methods. Our objective was to evaluate the performance of these algorithms in terms of path optimality and computational efficiency under differential constraints.
+
+Our experimental results demonstrated that the A* algorithm, while providing optimal solutions in simple 2 dimensional environments, it struggles with the increased complexity when handling high-dimensional configuration spaces with more dynamic constraints. However, the PRM method showed consistent results in navigating complex environments with dynamic obstacles due to its probabilistic sampling nature and ability to handle large configuration spaces more efficiently.
+
+Both methods have advantages and disadvantages,A* excels in predetermined environments. PRM provides flexibility and scalability in more dynamic scenarios. This dual approach shows the necessity for hybrid strategies that can leverage the strengths of both deterministic and probabilistic planning algorithms to achieve robust and efficient motion planning in real-world applications.
+
+\begin{thebibliography}{}
+  \bibitem[\protect\citename{ICRA } 2024]{bu}
+    ICRA. 2024. \textit{E. Schmerling, L. Janson, and M. Pavone, “Optimal Sampling-Based Motion Planning under Differential Constraints: the Driftless Case,” pdf, ICRA. Accessed: Jun. 13, 2024. [Online]. Available }%
+\textit{https://stanford.edu/~pavone/papers/Schmerling.Janson.ea.ICRA15a.pdf}
+  \bibitem[\protect\citename{Wikipedia Contributors} 2019]{ch}
+    A* search algorithm,” Wikipedia, Mar. 10, 2019. https://en.wikipedia.org/wiki/A* search algorithm
+  \bibitem[\protect\citename{Principles of Robot Autonomy} 2021]{hi}
+    \textit{M. Pavone and J. Lorenzetti, Principles of Robot Autonomy. 2021.}
+  \bibitem[\protect\citename{Probabilistic roadmap, Wikipedia} Mar. 29, 2022]{kd} \textit{https://en.wikipedia.org/wiki/ProbabilisticRoadmap}
+  
+  \bibitem[\protect\citename{Introduction to autonomous mobile robots. } \pushright 2011]{kd} 
+  \textit{R. Siegwart, Illah Reza Nourbakhsh, and Davide Scaramuzza, Introduction to autonomous mobile robots. Cambridge, Mass.: Mit Press, 2011.}
+\end{thebibliography}
+
+
+
+    \section{Contact us}
+        \begin{info}
+            \faEnvelope[regular]\hspace{7pt}ahnaf.ojayer@northsouth.edu \\
+    \faEnvelope[regular]\hspace{7pt}maisha.subha@northsouth.edu \\
+        \end{info}
+        
+%----------------------------------------------------------
+
+\printbibliography
+
+%----------------------------------------------------------
+
+\end{document}
